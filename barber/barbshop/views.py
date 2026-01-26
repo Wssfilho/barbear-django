@@ -1,6 +1,6 @@
 # Create your views here.
 from rest_framework.viewsets import ModelViewSet
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.http import JsonResponse
@@ -17,9 +17,13 @@ class BarbshopModelViewSet(ModelViewSet):
     serializer_class = BarbshopSerializer
     queryset = BarberShop.objects.all()
 
+    def get_permissions(self):
+        if self.action == 'list':
+            return [AllowAny()]
+        return super().get_permissions()
+
     def list(self, request):
-        usuario = Usuario.objects.get(Vinculado=request.user)
-        barbershops = BarberShop.objects.filter(Dono=usuario)
+        barbershops = BarberShop.objects.all()
         serializer = BarbshopSerializer(barbershops, many=True)
         return Response({'status': 200, 'barbershops': serializer.data})
 
