@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'Usuario',
     'barbshop',
+    'service',
     'rest_framework',
     'django_extensions',
     'corsheaders',

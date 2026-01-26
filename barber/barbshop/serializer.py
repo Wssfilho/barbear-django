@@ -11,3 +11,9 @@ class BarbshopSerializer(serializers.ModelSerializer):
         model = BarberShop
         fields = ('id', 'Dono', 'Nome', 'Endereco', 'Telefone',
                   'Email', 'horario_abertura', 'horario_fechamento')
+
+
+class BarbshopSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BarberShop
+        fields = ('id', 'Nome')
