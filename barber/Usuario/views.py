@@ -1,10 +1,12 @@
 from rest_framework.viewsets import ModelViewSet
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action
 from django.contrib.auth.hashers import make_password
 from rest_framework.response import Response
 from django.http import JsonResponse
 from django.contrib.auth.models import User
+
+from barbshop.permissions import IsBarbeiro
 from .models import Usuario
 from .serializer import UsuarioSerializer
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -12,12 +14,17 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 class UsuarioModelViewSet(ModelViewSet):
     # Definindo autenticação e permissões
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticated, IsBarbeiro)
     authentication_classes = (JWTAuthentication,)
     serializer_class = UsuarioSerializer
     queryset = Usuario.objects.all()
 
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'delete', 'me']:
+            return [AllowAny()]
+        return super().get_permissions()
     # Listar todos os usuários
+
     def list(self, request):
         usuarios = Usuario.objects.all()
         serializer = UsuarioSerializer(usuarios, many=True)
