@@ -94,5 +94,10 @@ class schedulingModelViewSet(ModelViewSet):
         )
         return Response({'message': 'Agendamento criado com sucesso', 'scheduling': SchedulingSerializer(scheduling).data}, status=201)
 
-    def patch(self, request, pk=None):
-        schedule = Scheduling.objects.get(id=pk)
+    def destroy(self, request, pk=None):
+        try:
+            scheduling = Scheduling.objects.get(pk=pk)
+        except Scheduling.DoesNotExist:
+            return Response({'error': 'Agendamento não encontrado'}, status=404)
+        scheduling.delete()
+        return Response({'message': 'Agendamento cancelado com sucesso'}, status=200)
