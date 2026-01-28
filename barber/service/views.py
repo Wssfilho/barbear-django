@@ -11,29 +11,47 @@ from barbshop.permissions import IsBarbeiro
 
 
 class ServiceModelViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsBarbeiro]
     authentication_classes = (JWTAuthentication,)
     serializer_class = ServiceSimpleSerializer
-    queryset = BarberShop.objects.all()
+    queryset = Service.objects.all()
+
+    def get_permissions(self):
+        if self.action == 'list':
+            self.permission_classes = [AllowAny]
+        return super().get_permissions()
 
     def list(self, request):
-        # Obtém o nome da barbearia do body da requisição
-        nome_barbearia = request.data.get('barbearia', None)
+        barbshop_id = request.GET.get("id")
+        if not barbshop_id:
+            return Response({'status': 400, 'message': 'barbshop_id é obrigatório.'}, status=400)
 
-        if not nome_barbearia:
-            return Response({
-                'error': 'O campo nome_barbearia é obrigatório no body'
-            }, status=400)
-
-        # Filtra os serviços pela barbearia com o nome informado
-        services = Service.objects.filter(
-            Barbearia__Nome__icontains=nome_barbearia
-        )
+        services = Service.objects.filter(Barbearia_id=barbshop_id)
 
         if not services.exists():
-            return Response({
-                'message': 'Nenhum serviço encontrado para esta barbearia'
-            }, status=404)
+            return Response({'status': 404, 'message': 'Nenhum serviço encontrado para esta barbearia'}, status=404)
 
-        serializer = self.get_serializer(services, many=True)
-        return Response(serializer.data)
+        serializer = ServiceSimpleSerializer(services, many=True)
+        return Response({'status': 200, 'services': serializer.data})
+
+    def patch(self, request, pk=None):
+        service = Service.objects.filter(id=pk).first()
+        if not service:
+            return Response({'status': 404, 'message': 'Serviço não encontrado.'}, status=404)
+        Nome = request.data.get('Nome')
+        Descricao = request.data.get('Descricao')
+        Preco = request.data.get('Preco')
+        service.Nome = Nome
+        service.Descricao = Descricao
+        service.Preco = Preco
+        service.save()
+        return Response({'status': 200, 'message': 'Serviço atualizado com sucesso.'
+                         }, status=200)
+
+    def delete(self, request, pk=None):
+        service = Service.objects.filter(id=pk).first()
+        if not service:
+            return Response({'status': 404, 'message': 'Serviço não encontrado.'}, status=404)
+        service.delete()
+        return Response({'status': 200, 'message': 'Serviço deletado com sucesso.'
+                         }, status=200)
