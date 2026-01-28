@@ -15,7 +15,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuario
         fields = ('id', 'Vinculado', 'Telefone',
-                  'TipoUsuario')
+                  )
 
 
 class UsuarioSimpleSerializer(serializers.ModelSerializer):
