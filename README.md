@@ -614,30 +614,87 @@ Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc...
 ## 🗂️ Estrutura do Projeto
 
 ```
-barber/
-├── barber/              # Configurações principais do Django
-│   ├── settings.py      # Configurações do projeto
-│   ├── urls.py          # Rotas principais
-│   └── wsgi.py          # Configuração WSGI
-├── barbshop/            # App de barbearias
-│   ├── models.py        # Modelo BarberShop
-│   ├── views.py         # ViewSet de barbearias
-│   ├── serializer.py    # Serializers
-│   └── permissions.py   # Permissão IsBarbeiro
-├── Usuario/             # App de usuários
-│   ├── models.py        # Modelo Usuario
-│   ├── views.py         # ViewSet de usuários
-│   └── serializer.py    # Serializers
-├── service/             # App de serviços
-│   ├── models.py        # Modelo Service
-│   ├── views.py         # ViewSet de serviços
-│   └── serializer.py    # Serializers
-├── scheduling/          # App de agendamentos
-│   ├── models.py        # Modelo Scheduling
-│   ├── views.py         # ViewSet de agendamentos
-│   └── serializer.py    # Serializers
-└── manage.py            # CLI do Django
+barbear-django/
+├── barber/                      # Backend Django
+│   ├── barber/                  # Configurações principais do Django
+│   │   ├── settings.py          # Configurações do projeto
+│   │   ├── urls.py              # Rotas principais
+│   │   └── wsgi.py              # Configuração WSGI
+│   ├── barbshop/                # App de barbearias
+│   │   ├── models.py            # Modelo BarberShop
+│   │   ├── views.py             # ViewSet de barbearias
+│   │   ├── serializer.py        # Serializers
+│   │   └── permissions.py       # Permissão IsBarbeiro
+│   ├── Usuario/                 # App de usuários
+│   │   ├── models.py            # Modelo Usuario
+│   │   ├── views.py             # ViewSet de usuários
+│   │   └── serializer.py        # Serializers
+│   ├── service/                 # App de serviços
+│   │   ├── models.py            # Modelo Service
+│   │   ├── views.py             # ViewSet de serviços
+│   │   └── serializer.py        # Serializers
+│   ├── scheduling/              # App de agendamentos
+│   │   ├── models.py            # Modelo Scheduling
+│   │   ├── views.py             # ViewSet de agendamentos
+│   │   └── serializer.py        # Serializers
+│   └── manage.py                # CLI do Django
+│
+├── frontend/                    # Frontend Next.js
+│   ├── app/                     # App Router do Next.js
+│   │   ├── page.tsx             # Landing page
+│   │   ├── login/               # Página de login
+│   │   ├── cadastro/            # Página de cadastro
+│   │   ├── barbearias/          # Lista e detalhes de barbearias
+│   │   ├── agendar/             # Sistema de agendamento
+│   │   └── meus-agendamentos/   # Dashboard do usuário
+│   ├── components/              # Componentes reutilizáveis
+│   │   ├── header.tsx           # Navegação principal
+│   │   └── footer.tsx           # Rodapé
+│   ├── lib/                     # Utilitários e contextos
+│   │   ├── api.ts               # Cliente da API
+│   │   └── auth-context.tsx     # Contexto de autenticação
+│   ├── package.json             # Dependências do frontend
+│   └── next.config.mjs          # Configuração do Next.js
+│
+└── requirements.txt             # Dependências Python
 ```
+
+## 🖥️ Frontend (Next.js)
+
+O projeto inclui um frontend moderno desenvolvido com Next.js 16 e Tailwind CSS.
+
+### Instalação do Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+### Configuração
+
+Crie um arquivo `.env.local` na pasta `frontend`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+### Executando o Frontend
+
+```bash
+npm run dev
+```
+
+O frontend estará disponível em: `http://localhost:3000`
+
+### Funcionalidades do Frontend
+
+- Landing page moderna com design escuro premium
+- Sistema de autenticação JWT integrado
+- Lista de barbearias com busca
+- Detalhes de barbearias e serviços
+- Sistema de agendamento com calendário
+- Dashboard do usuário (meus agendamentos)
+- Design responsivo para mobile e desktop
 
 ## 🧪 Testando a API
 
