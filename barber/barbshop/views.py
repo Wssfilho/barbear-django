@@ -79,3 +79,4 @@ class BarbshopModelViewSet(ModelViewSet):
             return Response({'status': 404, 'message': 'Barbearia não encontrada.'})
         barbshop.delete()
         return Response({'status': 200, 'message': 'Barbearia deletada com sucesso.'})
+
