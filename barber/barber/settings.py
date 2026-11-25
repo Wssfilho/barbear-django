@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from datetime import timedelta
 from pathlib import Path
 
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     'barbshop',
     'service',
     'scheduling',
+    'assistant',
     'rest_framework',
     'django_extensions',
     'corsheaders',
@@ -51,6 +53,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -59,6 +62,10 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'barber.urls'
+
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get(
+    'CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173'
+).split(',') if origin.strip()]
 
 TEMPLATES = [
     {
@@ -81,16 +88,24 @@ WSGI_APPLICATION = 'barber.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'Tramontina',
-        'USER': 'postgres',
-        'PASSWORD': '123',
-        'HOST': 'localhost',
-        'PORT': '5432',
+if os.environ.get('USE_SQLITE') == '1':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'Tramontina',
+            'USER': 'postgres',
+            'PASSWORD': '123',
+            'HOST': 'localhost',
+            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        }
+    }
 
 
 # Password validation
@@ -148,3 +163,12 @@ SIMPLE_JWT = {
     'TOKEN_TYPE_CLAIM': 'token_type',
     'JTI_CLAIM': 'jti',
 }
+
+# External assistant: credentials are server-only; status checks configuration only.
+# Explicit economical defaults: Gemini gemini-3.8-flash / OpenAI gpt-5.4-mini.
+AI_PROVIDER = os.environ.get('AI_PROVIDER', '').strip().lower()
+AI_MODEL = os.environ.get('AI_MODEL', '').strip()
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+AI_REQUESTS_PER_HOUR = max(1, min(100, int(os.environ.get('AI_REQUESTS_PER_HOUR', '10'))))
+AI_COOLDOWN_SECONDS = max(20, min(300, int(os.environ.get('AI_COOLDOWN_SECONDS', '30'))))
