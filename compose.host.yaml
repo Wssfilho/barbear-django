@@ -1,0 +1,70 @@
+name: barbear-host
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: barbear
+      POSTGRES_USER: barbear
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Execute python3 deploy/host.py start}
+    volumes:
+      - host_postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U barbear -d barbear"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    build: .
+    image: barbear-host:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?Execute python3 deploy/host.py start}
+      DATABASE_URL: postgresql://barbear:${POSTGRES_PASSWORD}@db:5432/barbear
+      ALLOWED_HOSTS: localhost,127.0.0.1,${PUBLIC_HOST:-localhost}
+      CSRF_TRUSTED_ORIGINS: https://${PUBLIC_HOST:-localhost}
+      TRUST_PROXY_HTTPS: "1"
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      AI_MODEL: ${AI_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AI_REQUESTS_PER_HOUR: ${AI_REQUESTS_PER_HOUR:-10}
+      AI_COOLDOWN_SECONDS: ${AI_COOLDOWN_SECONDS:-30}
+    ports:
+      - "127.0.0.1:8080:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      start_period: 30s
+      retries: 10
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  tunnel:
+    image: cloudflare/cloudflared:2026.11.2
+    profiles: [public]
+    # O endereço do Quick Tunnel é temporário; host.py atualiza o domínio no Django.
+    restart: "no"
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", "http://web:8000"]
+    depends_on:
+      web:
+        condition: service_healthy
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  host_postgres:

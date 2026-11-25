@@ -1,21 +1,5 @@
-from rest_framework import permissions
+# As permissões por perfil ficam no app Usuario; este módulo mantém o import
+# histórico `from barbshop.permissions import IsBarbeiro`.
+from Usuario.permissions import IsBarbeiro, IsCliente, TemPerfil, get_perfil
 
-
-class IsBarbeiro(permissions.BasePermission):
-    """
-    Permissão customizada para permitir apenas barbeiros.
-    """
-    message = 'Apenas barbeiros podem acessar esta rota.'
-
-    def has_permission(self, request, view):
-        # Verifica se o usuário está autenticado
-        if not request.user.is_authenticated:
-            return False
-
-        # Verifica se tem um Usuario vinculado
-        try:
-            from Usuario.models import Usuario
-            usuario = Usuario.objects.get(Vinculado=request.user)
-            return usuario.TipoUsuario == 2
-        except Usuario.DoesNotExist:
-            return False
+__all__ = ['IsBarbeiro', 'IsCliente', 'TemPerfil', 'get_perfil']
