@@ -1,103 +1,130 @@
-# Create your views here.
-from datetime import datetime, time, timedelta
-from rest_framework.viewsets import ModelViewSet
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from datetime import datetime
+
+from django.db import IntegrityError, transaction
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from django.http import JsonResponse
-from Usuario.models import Usuario
-from service.models import Service
-from .models import Scheduling
-from .serializer import SchedulingSerializer, ServiceSimpleSerializer
+from rest_framework.viewsets import GenericViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from barbshop.permissions import IsBarbeiro
+
+from Usuario.models import Usuario
+from Usuario.permissions import IsCliente, TemPerfil, get_perfil
+from barbshop.models import BarberShop
+from service.models import Service
+from .availability import available_times, available_times_for_barber, available_times_for_shop
+from .models import Scheduling
+from .serializer import SchedulingSerializer, SchedulingWriteSerializer
 
 
-class schedulingModelViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticated, IsBarbeiro]
+HORARIO_INDISPONIVEL = 'Horario indisponivel para agendamento'
+
+
+def parse_date(value):
+    try:
+        return datetime.strptime(str(value), '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return None
+
+
+def invalid(message, status=400):
+    return Response({'error': message}, status=status)
+
+
+class schedulingModelViewSet(GenericViewSet):
+    permission_classes = [IsAuthenticated, TemPerfil]
     authentication_classes = (JWTAuthentication,)
     serializer_class = SchedulingSerializer
-    queryset = Scheduling.objects.all()
 
     def get_permissions(self):
-        if self.action == 'list':
-            self.permission_classes = [IsBarbeiro]
+        if self.action == 'available_times':
+            return [AllowAny()]
+        if self.action == 'create':
+            return [IsAuthenticated(), IsCliente()]
         return super().get_permissions()
 
+    def get_queryset(self):
+        perfil = get_perfil(self.request.user)
+        queryset = Scheduling.objects.select_related(
+            'cliente__Vinculado', 'barbeiro__Vinculado', 'servico__Barbearia')
+        if perfil.is_barbeiro:
+            queryset = queryset.filter(barbeiro=perfil)
+        else:
+            queryset = queryset.filter(cliente=perfil)
+        return queryset.order_by('data_agendamento', 'horario_agendamento', 'id')
+
     def list(self, request):
-        usuario = Usuario.objects.get(Vinculado=request.user)
-        scheluings = Scheduling.objects.filter(cliente=usuario)
-        serializer = SchedulingSerializer(scheluings, many=True)
-        return Response(serializer.data)
+        queryset = self.get_queryset()
+        date_str = request.query_params.get('date')
+        if date_str:
+            day = parse_date(date_str)
+            if not day:
+                return invalid('Formato de data inválido. Use YYYY-MM-DD')
+            queryset = queryset.filter(data_agendamento=day)
+        return Response(self.get_serializer(queryset, many=True).data)
+
+    def retrieve(self, request, pk=None):
+        return Response(self.get_serializer(self.get_object()).data)
 
     @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def available_times(self, request):
-        """Retorna horários disponíveis para uma data específica"""
-        date_str = request.query_params.get('date')
-
-        if not date_str:
-            return Response({'error': 'Data não fornecida'}, status=400)
-
-        try:
-            date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        except ValueError:
-            return Response({'error': 'Formato de data inválido. Use YYYY-MM-DD'}, status=400)
-
-        # Gera todos os horários de 20 em 20 minutos (ex: 08:00 às 18:00)
-        start_hour = 8
-        end_hour = 18
-        all_times = []
-
-        current = datetime.combine(date, time(start_hour, 0))
-        end = datetime.combine(date, time(end_hour, 0))
-
-        while current <= end:
-            all_times.append(current.time().strftime('%H:%M'))
-            current += timedelta(minutes=20)
-
-        # Busca horários já agendados para essa data
-        scheduled = Scheduling.objects.filter(
-            data_agendamento=date
-        ).values_list('horario_agendamento', flat=True)
-
-        scheduled_times = [t.strftime('%H:%M') for t in scheduled]
-
-        # Retorna apenas os horários disponíveis
-        available = [t for t in all_times if t not in scheduled_times]
-
-        return Response({
-            'date': date_str,
-            'available_times': available,
-        })
+        day = parse_date(request.query_params.get('date'))
+        if not day:
+            return invalid('Informe uma data no formato YYYY-MM-DD.')
+        shop_id = request.query_params.get('barbearia')
+        barber_id = request.query_params.get('barbeiro')
+        service_id = request.query_params.get('servico')
+        shop = None
+        # O serviço é um filtro opcional para compatibilidade com clientes existentes.
+        if service_id:
+            service = Service.objects.select_related('Barbearia__Dono').filter(
+                pk=service_id if service_id.isdigit() else None).first()
+            if not service:
+                return invalid('Serviço não encontrado', status=404)
+            shop = service.Barbearia
+            if shop_id and str(shop.pk) != shop_id:
+                return invalid('O serviço informado não pertence a esta barbearia')
+        elif shop_id:
+            shop = BarberShop.objects.select_related('Dono').filter(
+                pk=shop_id if shop_id.isdigit() else None).first()
+            if not shop:
+                return invalid('Barbearia não encontrada', status=404)
+        if shop:
+            barber = shop.Dono
+            if barber_id and str(barber.pk) != barber_id:
+                return invalid('O barbeiro informado não atende nesta barbearia')
+        elif barber_id:
+            barber = Usuario.objects.filter(pk=barber_id if barber_id.isdigit() else None).first()
+        else:
+            return invalid('Informe o barbeiro ou a barbearia')
+        if not barber or not barber.is_barbeiro:
+            return invalid('Barbeiro não encontrado', status=404)
+        slots = available_times_for_shop(shop, day) if shop else available_times_for_barber(barber, day)
+        return Response({'date': day.isoformat(), 'barbeiro': barber.pk, 'available_times': slots})
 
     def create(self, request):
-        usuario = Usuario.objects.get(Vinculado=request.user)
-        service = request.data.get('servico')
-        servico = Service.objects.get(id=service)
-        pode_agendar = Scheduling.objects.filter(
-            data_agendamento=request.data.get('data_agendamento'),
-            horario_agendamento=request.data.get('horario_agendamento')
-        ).exists()
-        if pode_agendar:
-            return Response({'error': 'Horario indisponivel para agendamento'}, status=400)
-        desc = request.data.get('descricao')
-        data_agendamento = request.data.get('data_agendamento')
-        horario_agendamento = request.data.get('horario_agendamento')
-        if not service or not data_agendamento or not horario_agendamento:
-            return Response({'error': 'Serviço, data ou horário não fornecidos'}, status=400)
-        scheduling = Scheduling.objects.create(
-            cliente=usuario,
-            servico=servico,
-            descricao=desc,
-            data_agendamento=data_agendamento,
-            horario_agendamento=horario_agendamento
-        )
-        return Response({'message': 'Agendamento criado com sucesso', 'scheduling': SchedulingSerializer(scheduling).data}, status=201)
+        serializer = SchedulingWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        service = data['servico']
+        barber_id = request.data.get('barbeiro')
+        if barber_id not in (None, '') and str(barber_id) != str(service.Barbearia.Dono_id):
+            return invalid('O serviço escolhido não pertence a este barbeiro')
+        # Serializa reservas do profissional, inclusive entre serviços/lojas diferentes.
+        try:
+            with transaction.atomic():
+                owner = Usuario.objects.select_for_update().get(pk=service.Barbearia.Dono_id)
+                if not owner.is_barbeiro:
+                    raise ValidationError({'error': 'O profissional não está disponível.'})
+                if data['horario_agendamento'].strftime('%H:%M') not in available_times(service, data['data_agendamento']):
+                    return invalid(HORARIO_INDISPONIVEL)
+                booking = Scheduling.objects.create(
+                    cliente=get_perfil(request.user), barbeiro=owner, **data)
+        except IntegrityError:
+            return invalid(HORARIO_INDISPONIVEL)
+        return Response({'message': 'Agendamento criado com sucesso',
+                         'scheduling': SchedulingSerializer(booking).data}, status=201)
 
     def destroy(self, request, pk=None):
-        try:
-            scheduling = Scheduling.objects.get(pk=pk)
-        except Scheduling.DoesNotExist:
-            return Response({'error': 'Agendamento não encontrado'}, status=404)
-        scheduling.delete()
-        return Response({'message': 'Agendamento cancelado com sucesso'}, status=200)
+        self.get_object().delete()
+        return Response({'message': 'Agendamento cancelado com sucesso'})
